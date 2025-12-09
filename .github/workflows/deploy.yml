@@ -28,12 +28,32 @@ jobs:
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ env.DOCKER_PASSWORD }}
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ${{ env.DOCKER_USERNAME }}/my-static-site:latest
+      - name: Build Docker Compose services
+        run: docker-compose build
+
+      - name: Run Docker Compose in detached mode
+        run: docker-compose up -d
+
+      - name: Wait for healthcheck
+        run: |
+          echo "Esperando que el servicio esté saludable..."
+          for i in {1..10}; do
+            status=$(docker inspect --format='{{.State.Health.Status}}' my-static-site_web_1)
+            echo "Estado del contenedor: $status"
+            if [ "$status" == "healthy" ]; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "El contenedor no se volvió healthy"
+          exit 1
+
+      - name: Push Docker image
+        run: docker-compose push
+
+      - name: Shut down Docker Compose
+        if: success() || failure()
+        run: docker-compose down
 
       - name: Send Email Notification on Success
         if: success()
