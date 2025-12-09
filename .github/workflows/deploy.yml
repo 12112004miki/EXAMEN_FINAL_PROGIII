@@ -1,4 +1,4 @@
-name: Deploy Static Site
+name: Docker Build and Push
 
 on:
   push:
@@ -6,77 +6,21 @@ on:
       - main
 
 jobs:
-  build-and-deploy:
+  docker:
     runs-on: ubuntu-latest
-    env:
-      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      EMAIL_TO: ${{ secrets.EMAIL_TO }}
-      EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-      EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ env.DOCKER_USERNAME }}
-          password: ${{ env.DOCKER_PASSWORD }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build Docker Compose services
-        run: docker-compose build
-
-      - name: Run Docker Compose in detached mode
-        run: docker-compose up -d
-
-      - name: Wait for healthcheck
-        run: |
-          echo "Esperando que el servicio esté saludable..."
-          for i in {1..10}; do
-            status=$(docker inspect --format='{{.State.Health.Status}}' my-static-site_web_1)
-            echo "Estado del contenedor: $status"
-            if [ "$status" == "healthy" ]; then
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "El contenedor no se volvió healthy"
-          exit 1
-
-      - name: Push Docker image
-        run: docker-compose push
-
-      - name: Shut down Docker Compose
-        if: success() || failure()
-        run: docker-compose down
-
-      - name: Send Email Notification on Success
-        if: success()
-        uses: dawidd6/action-send-mail@v3
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
         with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ env.EMAIL_FROM }}
-          password: ${{ env.EMAIL_PASSWORD }}
-          subject: "Despliegue exitoso"
-          body: "El despliegue de la página estática fue exitoso."
-          to: ${{ env.EMAIL_TO }}
-          from: ${{ env.EMAIL_FROM }}
-
-      - name: Send Email Notification on Failure
-        if: failure()
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ env.EMAIL_FROM }}
-          password: ${{ env.EMAIL_PASSWORD }}
-          subject: "Despliegue fallido"
-          body: "El despliegue de la página estática ha fallado."
-          to: ${{ env.EMAIL_TO }}
-          from: ${{ env.EMAIL_FROM }}
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/my-static-site:latest
