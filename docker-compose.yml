@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    image: skt12ds/my-static-site:latest
+    ports:
+      - "80:80"
+
+

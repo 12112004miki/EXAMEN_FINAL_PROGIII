@@ -1,0 +1,157 @@
+my-static-site/
+├── docker-compose.yml
+├── Dockerfile
+├── .github/
+│   └── workflows/
+│       └── deploy.yml
+├── src/
+│   ├── index.html
+│   ├── style.css
+│   └── script.js
+└── README.md
+Perfecto, vamos a desarrollar un pipeline completo de GitHub Actions que haga lo que pides: construir una imagen Docker de una página web estática (HTML, CSS, JS), subirla a Docker Hub usando Docker y Docker Compose, y enviar un correo electrónico al terminar, indicando éxito o fallo. Te lo detallo paso a paso.
+
+1️⃣ Estructura del proyecto
+
+Supongamos que tu proyecto tiene esta estructura:
+
+my-static-site/
+├── docker-compose.yml
+├── Dockerfile
+├── .github/
+│   └── workflows/
+│       └── deploy.yml
+├── src/
+│   ├── index.html
+│   ├── style.css
+│   └── script.js
+└── README.md
+
+2️⃣ Dockerfile
+# Usamos nginx como servidor web
+FROM nginx:alpine
+
+# Copiamos los archivos estáticos al directorio de nginx
+COPY src/ /usr/share/nginx/html
+
+# Exponemos el puerto 80
+EXPOSE 80
+
+# Comando por defecto
+CMD ["nginx", "-g", "daemon off;"]
+
+3️⃣ docker-compose.yml
+version: '3.8'
+
+services:
+  web:
+    build: .
+    image: your_dockerhub_username/my-static-site:latest
+    ports:
+      - "80:80"
+
+
+Cambia your_dockerhub_username por tu usuario de Docker Hub.
+
+4️⃣ GitHub Actions Workflow
+
+Archivo: .github/workflows/deploy.yml
+
+name: Deploy Static Site
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      EMAIL_TO: ${{ secrets.EMAIL_TO }}
+      EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+      EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ env.DOCKER_USERNAME }}/my-static-site:latest
+
+      - name: Send Email Notification on Success
+        if: success()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ env.EMAIL_FROM }}
+          password: ${{ env.EMAIL_PASSWORD }}
+          subject: "✅ Despliegue exitoso"
+          body: "El despliegue de la página estática fue exitoso."
+          to: ${{ env.EMAIL_TO }}
+          from: ${{ env.EMAIL_FROM }}
+
+      - name: Send Email Notification on Failure
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ env.EMAIL_FROM }}
+          password: ${{ env.EMAIL_PASSWORD }}
+          subject: "❌ Despliegue fallido"
+          body: "El despliegue de la página estática ha fallado."
+          to: ${{ env.EMAIL_TO }}
+          from: ${{ env.EMAIL_FROM }}
+
+5️⃣ Explicación
+
+Dockerfile: empaqueta la web estática usando Nginx.
+
+docker-compose.yml: define el servicio web que construye la imagen.
+
+GitHub Actions:
+
+Se dispara en cada push a main.
+
+Configura Docker y Buildx.
+
+Hace login en Docker Hub.
+
+Construye y publica la imagen.
+
+Envía un correo según éxito o fallo usando dawidd6/action-send-mail.
+
+6️⃣ Secretos necesarios en GitHub
+
+En tu repositorio, ve a Settings → Secrets and variables → Actions y agrega:
+
+DOCKER_USERNAME → tu usuario de Docker Hub
+
+DOCKER_PASSWORD → tu contraseña/token de Docker Hub
+
+EMAIL_FROM → tu correo (ej. Gmail)
+
+EMAIL_PASSWORD → tu contraseña o app password
+
+EMAIL_TO → correo receptor del aviso
+
+Si quieres, puedo hacer una versión mejorada que use Docker Compose para levantar localmente la web antes de hacer push, y así probarla dentro del pipeline antes de enviarla a Docker Hub. Esto agrega una capa extra de validación automática.
+
+¿Quieres que haga eso?
